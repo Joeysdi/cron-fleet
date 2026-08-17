@@ -1,0 +1,160 @@
+# Scheduled pings for linksgone.com background jobs. Every endpoint requires
+# a Bearer secret (401 without it) — this repo holds no application code.
+#
+# Lives in its own PUBLIC repo because GitHub Actions minutes are unlimited
+# for public repositories; the private-repo fleet died when the account's
+# 2,000 included minutes ran out (2026-08-17). Schedules are best-effort
+# (GitHub may delay a few minutes) — acceptable for every job here.
+#
+# workflow_dispatch fires ONLY the harmless engine-health probe (a manual
+# run-all would send off-schedule user emails and burn scan quota — never
+# wire dispatch to the other steps).
+name: cron-fleet
+
+permissions:
+  contents: write # keepalive commit only
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *"
+    - cron: "30 4 * * *"
+    - cron: "0 6 * * 1"
+    - cron: "0 8 * * *"
+    - cron: "0 9 * * *"
+    - cron: "0 3 * * *"
+    - cron: "0 5 * * *"
+    - cron: "30 3 * * *"
+    - cron: "15 4 * * *"
+    - cron: "0 * * * *"
+    - cron: "0 */2 * * *"
+    - cron: "0 1 * * *"
+    - cron: "30 1 * * *"
+    - cron: "0 10 * * *"
+    - cron: "45 */6 * * *"
+    - cron: "20 * * * *"
+    - cron: "40 5 * * *"
+    - cron: "0 13 * * *"
+    - cron: "17 7 1 * *"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE: https://www.linksgone.com
+      AUTH: "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+    steps:
+      - name: cleanup-temp-scans (daily 04:00)
+        if: github.event.schedule == '0 4 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/cleanup-temp-scans"
+
+      - name: counter-notice-window (daily 04:30)
+        if: github.event.schedule == '30 4 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/counter-notice-window"
+
+      - name: lane-parity (daily 04:30)
+        if: github.event.schedule == '30 4 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/lane-parity"
+
+      - name: transparency-report (Mon 06:00)
+        if: github.event.schedule == '0 6 * * 1'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/transparency-report"
+
+      - name: wait-updates (daily 08:00)
+        if: github.event.schedule == '0 8 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/wait-updates"
+
+      - name: guided-filing-reminder (daily 09:00)
+        if: github.event.schedule == '0 9 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/guided-filing-reminder"
+
+      - name: verify-takedowns (daily 03:00)
+        if: github.event.schedule == '0 3 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/verify-takedowns"
+
+      - name: orphan-cleanup (daily 05:00)
+        if: github.event.schedule == '0 5 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/orphan-cleanup"
+
+      - name: bad-faith-tripwire (daily 03:30)
+        if: github.event.schedule == '30 3 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/bad-faith-tripwire"
+
+      - name: bond-pool-reconcile (daily 04:15)
+        if: github.event.schedule == '15 4 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/bond-pool-reconcile"
+
+      - name: takedown (hourly)
+        if: github.event.schedule == '0 * * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/takedown"
+
+      - name: telegram-history-walk (every 2h)
+        if: github.event.schedule == '0 */2 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/telegram-history-walk"
+
+      - name: daily-soak (daily 01:00)
+        if: github.event.schedule == '0 1 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/daily-soak"
+
+      # workflow_dispatch fires ONLY this harmless probe.
+      - name: engine-health (daily 01:30)
+        if: github.event.schedule == '30 1 * * *' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/engine-health"
+
+      - name: saved-scans-rerun (daily 10:00)
+        if: github.event.schedule == '0 10 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/saved-scans-rerun"
+
+      - name: guardian-scan (every 6h at :45)
+        if: github.event.schedule == '45 */6 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/guardian-scan"
+
+      - name: reconcile-payments (hourly at :20)
+        if: github.event.schedule == '20 * * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/reconcile-payments"
+
+      - name: purge-gov-ids (daily 05:40)
+        if: github.event.schedule == '40 5 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/purge-gov-ids"
+
+      - name: dfy-stall-alert (daily 13:00)
+        if: github.event.schedule == '0 13 * * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/dfy-stall-alert"
+
+      - name: takedown-link-check (monthly, 1st 07:17)
+        if: github.event.schedule == '17 7 1 * *'
+        continue-on-error: true
+        run: curl -fsS --max-time 300 -H "$AUTH" "$BASE/api/cron/takedown-link-check"
+
+      # GitHub auto-disables scheduled workflows in repos with no activity for
+      # 60 days. A monthly empty commit keeps the fleet alive unattended.
+      - name: keepalive (monthly, 1st 07:17)
+        if: github.event.schedule == '17 7 1 * *'
+        continue-on-error: true
+        run: |
+          git clone --depth 1 "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ka
+          cd ka
+          git config user.name "cron-keepalive"
+          git config user.email "actions@users.noreply.github.com"
+          git commit --allow-empty -m "keepalive $(date -u +%Y-%m)"
+          git push origin HEAD
