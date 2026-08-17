@@ -6,3 +6,4 @@ repository contains no application code, only the schedule.
 
 Public so the schedule runs on GitHub's unlimited free minutes for public
 repositories.
+
