@@ -1,0 +1,45 @@
+# External uptime canary for ksgroup.work (KSG Crisis Management). Read-only
+# probes: the homepage must render, /submit must serve, and the intake API must
+# boot (an empty POST must return the 400 validation error — no case is
+# created, no email fires). On any failure it emails the operator via Resend
+# and the run goes red. Lives in this public repo for the same reason as
+# cron.yml: unlimited Actions minutes.
+name: ksg-canary
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7,37 * * * *"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: probe ksgroup.work
+        env:
+          RESEND_KEY: ${{ secrets.RESEND_KSG_KEY }}
+        run: |
+          set -u
+          fails=""
+
+          body=$(curl -fsS --max-time 30 https://ksgroup.work/ || true)
+          echo "$body" | grep -q "KSG Crisis Management" || fails="$fails home-page-broken;"
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://ksgroup.work/submit || echo 000)
+          [ "$code" = "200" ] || fails="$fails submit-page-$code;"
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST -H 'Content-Type: application/json' -d '{}' https://ksgroup.work/api/cases || echo 000)
+          [ "$code" = "400" ] || fails="$fails intake-api-$code-expected-400;"
+
+          if [ -n "$fails" ]; then
+            echo "FAILURES: $fails"
+            curl -s -X POST https://api.resend.com/emails \
+              -H "Authorization: Bearer $RESEND_KEY" \
+              -H 'Content-Type: application/json' \
+              -d "{\"from\":\"KSG canary <no-reply@ksgroup.work>\",\"to\":[\"joeheffx@gmail.com\"],\"subject\":\"KSG DOWN: $fails\",\"text\":\"ksgroup.work canary failures: $fails\nRun: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}"
+            exit 1
+          fi
+          echo "all green"
